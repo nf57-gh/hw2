@@ -5,10 +5,10 @@ public class Reply {
 	/*
 	 * These are the private attributes for this entity object
 	 */
-    private int id;
-    private String author;
-    private String message;
-    private boolean isRead;
+    private int id; //ID number of the reply
+    private String author; //Author of the reply
+    private String message; //Contents of the reply
+    private boolean isRead; //Whether the reply has been read
 
     
     /*
@@ -62,7 +62,7 @@ public class Reply {
         
     /*
 	 * Method: void updateContent()
-	 * Description: Allows the contents of a message to be changed
+	 * Description: Allows the contents of a message to be changed (unless new content is empty)
 	 */
     public void updateContent(String newMessage) {
         if (newMessage == null || newMessage.trim().isEmpty())
