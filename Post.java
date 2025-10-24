@@ -9,11 +9,11 @@ public class Post {
 	 * These are the private attributes for this entity object
 	 */
 	
-	private int id;
-	private String author;
-	private String message;
-	private boolean hasBeenRead;
-	private List<Reply> replies;
+	private int id; //ID number of the post
+	private String author; //Author of the post
+	private String message; //Contents of the post
+	private boolean hasBeenRead; //Whether the post has been read
+	private List<Reply> replies; //Replies to the post
 	
 	
 	/*
