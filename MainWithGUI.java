@@ -29,12 +29,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * Rich, forum-inspired JavaFX view that lets students browse threads, read posts and replies,
- * and contribute new content. This replaces the console-style UI for a friendlier experience.
- */
+
 public class MainWithGUI {
 
+	/**
+   	 * Below are the private attributes for this class
+   	 */
     private static int postIdCounter = 1;
     private static int replyIdCounter = 1;
     private static int threadIdCounter = 1;
@@ -67,6 +67,11 @@ public class MainWithGUI {
     private Button deleteReplyButton;
     private Label statusLabel;
 
+    
+    /**
+     * Method: MainWithGUI()
+   	 * Description: Initializes the UI and establishes a default thread
+   	 */
     public MainWithGUI() {
         buildUI();
         ensureDefaultThread();
@@ -77,21 +82,34 @@ public class MainWithGUI {
         }
     }
 
+    /**
+     * Method: static void main(String[] args)
+   	 * Description: Launches the forum app
+   	 */
     public static void main(String[] args) {
         ForumAppLauncher.main(args);
     }
-
+    
+    /**
+   	 * Method: Parent getRootView()
+   	 * Description: Returns root view
+   	 */
     public Parent getRootView() {
         return root;
     }
 
     /**
-     * Convenience for other screens wanting to pop open the forum window.
+     * Method: void openInNewWindow()
+     * Description: Convenience for other screens wanting to pop open the forum window.
      */
     public void openInNewWindow() {
         ForumAppLauncher.showStandaloneWindow();
     }
 
+    /**
+   	 * Method: void buildUI()
+   	 * Description: Assembles top bar, content area, and bottom composer
+   	 */
     private void buildUI() {
         root = new BorderPane();
         root.setPadding(new Insets(14));
@@ -101,6 +119,10 @@ public class MainWithGUI {
         root.setBottom(buildBottomComposer());
     }
 
+    /**
+   	 * Method: VBox buildTopBar()
+   	 * Description: Creates the header with username, thread, etc
+   	 */
     private VBox buildTopBar() {
         VBox container = new VBox(10);
 
@@ -156,6 +178,10 @@ public class MainWithGUI {
         return container;
     }
 
+    /**
+   	 * Method: SplitPane buildContentArea()
+   	 * Description: Builds the pane that contains the posts and replies with their buttons
+   	 */
     private SplitPane buildContentArea() {
         postListView = new ListView<>(postData);
         postListView.setCellFactory(list -> new PostListCell());
@@ -213,6 +239,11 @@ public class MainWithGUI {
         return splitPane;
     }
 
+
+    /**
+   	 * Method: VBox buildBottomComposer()
+   	 * Description: Creates the section where users can compose new posts
+   	 */
     private VBox buildBottomComposer() {
         VBox container = new VBox(12);
         container.setPadding(new Insets(14, 0, 0, 0));
@@ -242,6 +273,10 @@ public class MainWithGUI {
         return container;
     }
 
+    /**
+   	 * Method: void bindButtonStates()
+   	 * Description: Changes whether the buttons are enabled or not
+   	 */
     private void bindButtonStates() {
         editPostButton.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
         deletePostButton.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
@@ -252,17 +287,29 @@ public class MainWithGUI {
         deleteReplyButton.disableProperty().bind(replyListView.getSelectionModel().selectedItemProperty().isNull());
     }
 
+    /**
+   	 * Method: void ensureDefaultThread()
+   	 * Description: If no threads exist, create "general"
+   	 */
     private void ensureDefaultThread() {
         if (allThreads.isEmpty()) {
             Thread defaultThread = new Thread(threadIdCounter++, "General Discussion");
             allThreads.add(defaultThread);
         }
     }
-
+    
+    /**
+   	 * Method: void refreshThreadSelector()
+   	 * Description: Updates the thread selector
+   	 */
     private void refreshThreadSelector() {
         threadData.setAll(allThreads);
     }
 
+    /**
+   	 * Method: void refreshPostsForThread(Thread thread)
+   	 * Description: Loads and displays all posts belonging to a specific thread
+   	 */
     private void refreshPostsForThread(Thread thread) {
         if (thread == null) {
             postData.clear();
@@ -276,6 +323,10 @@ public class MainWithGUI {
         markReadButton.setDisable(true);
     }
 
+    /**
+   	 * Method: void onPostSelected(Post post)
+   	 * Description: Updates reply list and status bar when a post is selected
+   	 */
     private void onPostSelected(Post post) {
         if (post == null) {
             replyData.clear();
@@ -301,6 +352,10 @@ public class MainWithGUI {
             post.getId(), threadName, author, status, suffix));
     }
 
+    /**
+   	 * Method: void onReplySelected(Reply reply)
+   	 * Description: Updates the status bar when a reply is selected
+   	 */
     private void onReplySelected(Reply reply) {
         if (reply == null) {
             return;
@@ -312,6 +367,10 @@ public class MainWithGUI {
         showStatus(String.format("Reply #%d • %s • %s", reply.getId(), author, status));
     }
 
+    /**
+   	 * Method: void addNewPost()
+   	 * Description: Creates and adds a new post to the currently selected thread
+   	 */
     private void addNewPost() {
         Thread thread = resolveActiveThread();
         if (thread == null) {
@@ -347,6 +406,10 @@ public class MainWithGUI {
         }
     }
 
+    /**
+   	 * Method: void addReplyToSelectedPost()
+   	 * Description: Creates and adds a new reply to the currently selected post
+   	 */
     private void addReplyToSelectedPost() {
         Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
@@ -377,6 +440,10 @@ public class MainWithGUI {
         }
     }
 
+    /**
+   	 * Method: void editSelectedPost()
+   	 * Description: Opens a dialog to edit the content of the selected post
+   	 */
     private void editSelectedPost() {
         Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
@@ -410,6 +477,10 @@ public class MainWithGUI {
         }
     }
 
+    /**
+   	 * Method: void deleteSelectedPost()
+   	 * Description: Removes the selected post after confirmation from the user
+   	 */
     private void deleteSelectedPost() {
         Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
@@ -436,6 +507,10 @@ public class MainWithGUI {
         showStatus("Post deleted.");
     }
 
+    /**
+   	 * Method: void markSelectedPostAsRead()
+   	 * Description: Marks the currently selected post as read and updates the UI
+   	 */
     private void markSelectedPostAsRead() {
         Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
@@ -449,6 +524,10 @@ public class MainWithGUI {
         showStatus("Marked post as read.");
     }
 
+    /**
+   	 * Method: void editSelectedReply()
+   	 * Description: Opens a dialog to edit the content of the selected reply
+   	 */
     private void editSelectedReply() {
         Reply reply = replyListView.getSelectionModel().getSelectedItem();
         if (reply == null) {
@@ -482,6 +561,10 @@ public class MainWithGUI {
         }
     }
 
+    /**
+   	 * Method: void deleteSelectedReply()
+   	 * Description: Removes the selected reply after confirmation from the user
+   	 */
     private void deleteSelectedReply() {
         Reply reply = replyListView.getSelectionModel().getSelectedItem();
         if (reply == null) {
@@ -505,6 +588,10 @@ public class MainWithGUI {
         showStatus("Reply deleted.");
     }
 
+    /**
+   	 * Method: void searchPosts()
+   	 * Description: Prompts for a keyword and displays all posts matching that search term
+   	 */
     private void searchPosts() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Search Posts");
@@ -535,6 +622,10 @@ public class MainWithGUI {
         applyFilteredPosts(matches, "Showing results for \"" + keyword + "\".");
     }
 
+    /**
+   	 * Method: void showPostsByCurrentUser()
+   	 * Description: Filters and displays only posts created by the current user
+   	 */
     private void showPostsByCurrentUser() {
         String user = requireUsername("view your posts");
         if (user == null) {
@@ -553,6 +644,10 @@ public class MainWithGUI {
         applyFilteredPosts(matches, "Showing posts by " + user + ".");
     }
 
+    /**
+   	 * Method: void showUnreadPosts()
+   	 * Description: Filters and displays only posts that haven't been marked as read
+   	 */
     private void showUnreadPosts() {
         List<Post> unread = allPosts.stream()
             .filter(post -> !post.hasBeenRead())
@@ -566,6 +661,10 @@ public class MainWithGUI {
         applyFilteredPosts(unread, "Showing unread posts.");
     }
 
+    /**
+   	 * Method: void applyFilteredPosts(List<Post> posts, String message)
+   	 * Description: Switches to filtered view mode and displays the provided list of posts
+   	 */
     private void applyFilteredPosts(List<Post> posts, String message) {
         viewMode = ViewMode.FILTERED;
         postData.setAll(posts);
@@ -575,6 +674,10 @@ public class MainWithGUI {
         showStatus(message + " Use Reset View to return to threads.");
     }
 
+    /**
+   	 * Method: void resetView()
+   	 * Description: Returns from filtered view back to normal thread-based browsing
+   	 */
     private void resetView() {
         viewMode = ViewMode.THREAD;
         refreshThreadSelector();
@@ -585,6 +688,10 @@ public class MainWithGUI {
         }
     }
 
+    /**
+   	 * Method: void reateThread()
+   	 * Description: Prompts for a thread name and creates a new discussion thread
+   	 */
     private void createThread() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("New Thread");
@@ -609,6 +716,10 @@ public class MainWithGUI {
         showStatus("Thread \"" + name + "\" created.");
     }
 
+    /**
+   	 * Method: String requireUsername(String action)
+   	 * Description: Validates and returns the username from the text field, or shows an error if empty
+   	 */
     private String requireUsername(String action) {
         String value = usernameField.getText() != null ? usernameField.getText().trim() : "";
         if (value.isEmpty()) {
@@ -618,6 +729,10 @@ public class MainWithGUI {
         return value;
     }
 
+    /**
+   	 * Method: String extractText(TextArea area, String errorMessage)
+   	 * Description: Retrieves and validates text from a TextArea, showing an error if empty
+   	 */
     private String extractText(TextArea area, String errorMessage) {
         String value = area.getText() != null ? area.getText().trim() : "";
         if (value.isEmpty()) {
@@ -627,6 +742,10 @@ public class MainWithGUI {
         return value;
     }
 
+    /**
+   	 * Method: boolean canModify(String author)
+   	 * Description: Checks if the current user is authorized to modify content created by the specified author
+   	 */
     private boolean canModify(String author) {
         String user = requireUsername("modify content");
         if (user == null) {
@@ -638,11 +757,19 @@ public class MainWithGUI {
         }
         return true;
     }
-
+    
+    /**
+   	 * Method: Thread getThreadForPost(Post post)
+   	 * Description: Retrieves the thread that contains the specified post
+   	 */
     private Thread getThreadForPost(Post post) {
         return postToThread.get(post);
     }
 
+    /**
+   	 * Method: Thread resolveActiveThread()
+   	 * Description: Returns the currently selected thread, or null if in filtered view mode
+   	 */
     private Thread resolveActiveThread() {
         if (viewMode == ViewMode.FILTERED) {
             showStatus("Reset to a thread before posting.");
@@ -651,11 +778,19 @@ public class MainWithGUI {
         return threadSelector.getValue();
     }
 
+    /**
+   	 * Method: void refreshAfterEdit(Post post)
+   	 * Description: Refreshes the post list and reselects the post after editing
+   	 */
     private void refreshAfterEdit(Post post) {
         postListView.refresh();
         onPostSelected(post);
     }
 
+    /**
+   	 * Method: boolean confirm(String title, String message)
+   	 * Description: Displays a confirmation dialog and returns true if the user clicks OK
+   	 */
     private boolean confirm(String title, String message) {
         Alert alert = new Alert(AlertType.CONFIRMATION, message);
         alert.setTitle(title);
@@ -664,10 +799,18 @@ public class MainWithGUI {
         return result.filter(buttonType -> buttonType == javafx.scene.control.ButtonType.OK).isPresent();
     }
 
+    /**
+   	 * Method: void showStatus(String message)
+   	 * Description: Displays a message in the status label at the bottom of the screen
+   	 */
     private void showStatus(String message) {
         statusLabel.setText(message);
     }
 
+    /**
+   	 * Method: static String preview(String text, int maxLength)
+   	 * Description: Truncates text to the specified length and adds ellipsis if needed
+   	 */
     private static String preview(String text, int maxLength) {
         if (text == null) {
             return "";
@@ -678,8 +821,14 @@ public class MainWithGUI {
         return text.substring(0, maxLength - 3) + "...";
     }
 
+    
     private final class PostListCell extends ListCell<Post> {
+    	/**
+       	 * Method: void updateItem(Post post, boolean empty)
+       	 * Description: Formats and displays post information in the posts ListView
+       	 */
         @Override
+        
         protected void updateItem(Post post, boolean empty) {
             super.updateItem(post, empty);
             if (empty || post == null) {
@@ -702,8 +851,14 @@ public class MainWithGUI {
         }
     }
 
+    
     private static final class ReplyListCell extends ListCell<Reply> {
+    	/**
+       	 * Method: void updateItem(Reply reply, boolean empty)
+       	 * Description: Formats and displays reply information in the replies ListView
+       	 */
         @Override
+        
         protected void updateItem(Reply reply, boolean empty) {
             super.updateItem(reply, empty);
             if (empty || reply == null) {
@@ -723,8 +878,14 @@ public class MainWithGUI {
         }
     }
 
+    
     private static final class ThreadListCell extends ListCell<Thread> {
+    	/**
+       	 * Method: void updateItem(Thread thread, boolean empty)
+       	 * Description: Formats and displays thread name and post count in the thread ComboBox
+       	 */
         @Override
+        
         protected void updateItem(Thread thread, boolean empty) {
             super.updateItem(thread, empty);
             if (empty || thread == null) {
