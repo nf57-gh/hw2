@@ -1,758 +1,737 @@
 package forumApp;
 
-import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
-import javafx.stage.Stage;
-import java.util.*;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
+import javafx.scene.Parent;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.Separator;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 
-public class Main {
-	
-	/**
-	 * These are the private attributes for this entity object
-	 */
-	private static int postIdCounter = 1;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+/**
+ * Rich, forum-inspired JavaFX view that lets students browse threads, read posts and replies,
+ * and contribute new content. This replaces the console-style UI for a friendlier experience.
+ */
+public class MainWithGUI {
+
+    private static int postIdCounter = 1;
     private static int replyIdCounter = 1;
     private static int threadIdCounter = 1;
-    private static List<Post> posts = new ArrayList<>();
-    private static List<Thread> threads = new ArrayList<>();
-    private TextArea displayArea;
-    private VBox forumView;
 
+    private static final List<Thread> allThreads = new ArrayList<>();
+    private static final List<Post> allPosts = new ArrayList<>();
+    private static final Map<Post, Thread> postToThread = new HashMap<>();
 
-    public Main() {
-    	setUpForumView();
-    	
-    	if(threads.isEmpty()) {
-    		Thread defaultThread = new Thread(threadIdCounter++, "General");
-            threads.add(defaultThread);
-    	}
+    private enum ViewMode { THREAD, FILTERED }
+
+    private ViewMode viewMode = ViewMode.THREAD;
+
+    private final ObservableList<Thread> threadData = FXCollections.observableArrayList();
+    private final ObservableList<Post> postData = FXCollections.observableArrayList();
+    private final ObservableList<Reply> replyData = FXCollections.observableArrayList();
+
+    private BorderPane root;
+
+    private ComboBox<Thread> threadSelector;
+    private ListView<Post> postListView;
+    private ListView<Reply> replyListView;
+    private TextField usernameField;
+    private TextArea newPostArea;
+    private TextArea newReplyArea;
+    private Button addReplyButton;
+    private Button editPostButton;
+    private Button deletePostButton;
+    private Button markReadButton;
+    private Button editReplyButton;
+    private Button deleteReplyButton;
+    private Label statusLabel;
+
+    public MainWithGUI() {
+        buildUI();
+        ensureDefaultThread();
+        refreshThreadSelector();
+        if (!threadData.isEmpty()) {
+            threadSelector.getSelectionModel().selectFirst();
+            refreshPostsForThread(threadSelector.getValue());
+        }
     }
-    
-    public VBox getForumView() {
-    	return forumView;
+
+    public static void main(String[] args) {
+        ForumAppLauncher.main(args);
     }
-    
-    public void openInNewWindow() {
-    	Stage stage = new Stage();
-    	stage.setTitle("Forum App");
-    	Scene scene = new Scene(forumView, 800, 600);
-    	stage.setScene(scene);
-    	stage.show();
-    }
-    
-    public void setUpForumView() {
-    	forumView = new VBox(10);
-    	displayArea = new TextArea();
-    	displayArea.setEditable(false);
-        displayArea.setPrefHeight(400);
-        
-        Button btn1 = new Button("1. Create a thread");
-        Button btn2 = new Button("2. Create a post");
-        Button btn3 = new Button("3. Create a reply to post");
-        Button btn4 = new Button("4. Read all posts");
-        Button btn5 = new Button("5. Search posts by keyword");
-        Button btn6 = new Button("6. Filter posts by unread status");
-        Button btn7 = new Button("7. List posts from specific user");
-        Button btn8 = new Button("8. Mark post as read");
-        Button btn9 = new Button("9. Read replies");
-        Button btn10 = new Button("10. Update a post");
-        Button btn11 = new Button("11. Update a reply");
-        Button btn12 = new Button("12. Delete a post");
-        Button btn13 = new Button("13. Delete a reply");
-        
-        btn1.setOnAction(e -> createThread());
-        btn2.setOnAction(e -> createPost());
-        btn3.setOnAction(e -> replyToPost());
-        btn4.setOnAction(e -> listPostsWithReplies());
-        btn5.setOnAction(e -> searchPostsByKeyword());
-        btn6.setOnAction(e -> filterByUnread());
-        btn7.setOnAction(e -> listPostsByUser());
-        btn8.setOnAction(e -> markPostAsRead());
-        btn9.setOnAction(e -> viewReplies());
-        btn10.setOnAction(e -> editPost());
-        btn11.setOnAction(e -> editReply());
-        btn12.setOnAction(e -> deletePost());
-        btn13.setOnAction(e -> deleteReply());
-        
-        FlowPane buttonPane = new FlowPane();
-        buttonPane.getChildren().addAll(btn1, btn2, btn3, 
-        		btn4, btn5, btn6, btn7, btn8, btn9, btn10, btn11, btn12, btn13);
-        forumView.getChildren().addAll(displayArea, buttonPane);
+
+    public Parent getRootView() {
+        return root;
     }
 
     /**
-   	 * Method: void createThread()
-   	 * Description: Instantiates a new thread
-   	 */
-    public void createThread() {
-    	TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Create Thread");
-        dialog.setHeaderText("Enter thread name/topic:");
-        dialog.setContentText("Thread name:");
-        
-        Optional<String> result = dialog.showAndWait();
-        result.ifPresent(name -> {
-            try {
-                Thread thread = new Thread(threadIdCounter++, name);
-                threads.add(thread);
-                displayArea.setText("Thread created!\n");
-            } catch (IllegalArgumentException e) {
-                displayArea.setText("Error: " + e.getMessage() + "\n");
+     * Convenience for other screens wanting to pop open the forum window.
+     */
+    public void openInNewWindow() {
+        ForumAppLauncher.showStandaloneWindow();
+    }
+
+    private void buildUI() {
+        root = new BorderPane();
+        root.setPadding(new Insets(14));
+
+        root.setTop(buildTopBar());
+        root.setCenter(buildContentArea());
+        root.setBottom(buildBottomComposer());
+    }
+
+    private VBox buildTopBar() {
+        VBox container = new VBox(10);
+
+        HBox row1 = new HBox(12);
+        row1.setAlignment(Pos.CENTER_LEFT);
+
+        Label userLabel = new Label("Display name:");
+        usernameField = new TextField();
+        usernameField.setPromptText("Enter the name to post as");
+        usernameField.setPrefWidth(200);
+
+        Label threadLabel = new Label("Thread:");
+        threadSelector = new ComboBox<>(threadData);
+        threadSelector.setPrefWidth(240);
+        threadSelector.setButtonCell(new ThreadListCell());
+        threadSelector.setCellFactory(list -> new ThreadListCell());
+        threadSelector.setOnAction(event -> {
+            Thread selected = threadSelector.getValue();
+            if (selected != null) {
+                viewMode = ViewMode.THREAD;
+                refreshPostsForThread(selected);
+                showStatus("Viewing thread \"" + selected.getName() + "\"");
             }
         });
+
+        Button newThreadButton = new Button("New Thread");
+        newThreadButton.setOnAction(event -> createThread());
+
+        Button resetViewButton = new Button("Reset View");
+        resetViewButton.setOnAction(event -> resetView());
+
+        row1.getChildren().addAll(
+            userLabel, usernameField,
+            new Separator(Orientation.VERTICAL),
+            threadLabel, threadSelector, newThreadButton, resetViewButton
+        );
+
+        HBox row2 = new HBox(10);
+        row2.setAlignment(Pos.CENTER_LEFT);
+
+        Button searchButton = new Button("Search Posts");
+        searchButton.setOnAction(event -> searchPosts());
+
+        Button myPostsButton = new Button("My Posts");
+        myPostsButton.setOnAction(event -> showPostsByCurrentUser());
+
+        Button unreadButton = new Button("Unread Posts");
+        unreadButton.setOnAction(event -> showUnreadPosts());
+
+        row2.getChildren().addAll(searchButton, myPostsButton, unreadButton);
+
+        container.getChildren().addAll(row1, row2);
+        return container;
     }
 
-    /**
-   	 * Method: void createPost()
-   	 * Description: Instantiates a new post and adds it to the collection
-   	 */
-    public void createPost() {
-        // Show available threads
+    private SplitPane buildContentArea() {
+        postListView = new ListView<>(postData);
+        postListView.setCellFactory(list -> new PostListCell());
+        postListView.getSelectionModel().selectedItemProperty()
+            .addListener((obs, oldValue, newValue) -> onPostSelected(newValue));
+        postListView.setPlaceholder(new Label("No posts yet. Be the first to start the discussion!"));
+        VBox.setVgrow(postListView, javafx.scene.layout.Priority.ALWAYS);
 
-    	if (threads.isEmpty()) {
-            displayArea.setText("No threads available. Creating a default thread.\n");
-            Thread defaultThread = new Thread(threadIdCounter++, "General");
-            threads.add(defaultThread);
+        editPostButton = new Button("Edit");
+        editPostButton.setOnAction(event -> editSelectedPost());
+
+        deletePostButton = new Button("Delete");
+        deletePostButton.setOnAction(event -> deleteSelectedPost());
+
+        markReadButton = new Button("Mark Read");
+        markReadButton.setOnAction(event -> markSelectedPostAsRead());
+        markReadButton.setDisable(true);
+
+        HBox postActions = new HBox(8, editPostButton, deletePostButton, markReadButton);
+        postActions.setAlignment(Pos.CENTER_LEFT);
+
+        VBox postsPane = new VBox(10,
+            new Label("Posts"),
+            postListView,
+            postActions
+        );
+        postsPane.setPrefWidth(420);
+
+        replyListView = new ListView<>(replyData);
+        replyListView.setCellFactory(list -> new ReplyListCell());
+        replyListView.getSelectionModel().selectedItemProperty()
+            .addListener((obs, oldValue, newValue) -> onReplySelected(newValue));
+        replyListView.setPlaceholder(new Label("Select a post to view replies."));
+        VBox.setVgrow(replyListView, javafx.scene.layout.Priority.ALWAYS);
+
+        editReplyButton = new Button("Edit");
+        editReplyButton.setOnAction(event -> editSelectedReply());
+
+        deleteReplyButton = new Button("Delete");
+        deleteReplyButton.setOnAction(event -> deleteSelectedReply());
+
+        HBox replyActions = new HBox(8, editReplyButton, deleteReplyButton);
+        replyActions.setAlignment(Pos.CENTER_LEFT);
+
+        VBox repliesPane = new VBox(10,
+            new Label("Replies"),
+            replyListView,
+            replyActions
+        );
+
+        SplitPane splitPane = new SplitPane(postsPane, repliesPane);
+        splitPane.setOrientation(Orientation.HORIZONTAL);
+        splitPane.setDividerPositions(0.5);
+
+        return splitPane;
+    }
+
+    private VBox buildBottomComposer() {
+        VBox container = new VBox(12);
+        container.setPadding(new Insets(14, 0, 0, 0));
+
+        VBox newPostBox = new VBox(8);
+        newPostArea = new TextArea();
+        newPostArea.setPromptText("Share something with the class...");
+        newPostArea.setPrefRowCount(3);
+        Button addPostButton = new Button("Post Message");
+        addPostButton.setOnAction(event -> addNewPost());
+        newPostBox.getChildren().addAll(new Label("Create a new post"), newPostArea, addPostButton);
+
+        VBox newReplyBox = new VBox(8);
+        newReplyArea = new TextArea();
+        newReplyArea.setPromptText("Reply to the selected post...");
+        newReplyArea.setPrefRowCount(3);
+        addReplyButton = new Button("Reply");
+        addReplyButton.setOnAction(event -> addReplyToSelectedPost());
+        newReplyBox.getChildren().addAll(new Label("Reply to this post"), newReplyArea, addReplyButton);
+
+        statusLabel = new Label();
+        statusLabel.setWrapText(true);
+
+        container.getChildren().addAll(newPostBox, new Separator(), newReplyBox, statusLabel);
+
+        bindButtonStates();
+        return container;
+    }
+
+    private void bindButtonStates() {
+        editPostButton.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
+        deletePostButton.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
+        addReplyButton.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
+        newReplyArea.disableProperty().bind(postListView.getSelectionModel().selectedItemProperty().isNull());
+
+        editReplyButton.disableProperty().bind(replyListView.getSelectionModel().selectedItemProperty().isNull());
+        deleteReplyButton.disableProperty().bind(replyListView.getSelectionModel().selectedItemProperty().isNull());
+    }
+
+    private void ensureDefaultThread() {
+        if (allThreads.isEmpty()) {
+            Thread defaultThread = new Thread(threadIdCounter++, "General Discussion");
+            allThreads.add(defaultThread);
         }
-        
-        StringBuilder sb = new StringBuilder("Available threads:\n");
-        for (Thread thread : threads) {
-            sb.append(thread).append("\n");
-        }
-        displayArea.setText(sb.toString());
-        
-        TextInputDialog threadDialog = new TextInputDialog();
-        threadDialog.setTitle("Create Post");
-        threadDialog.setHeaderText("Enter thread ID to post to:");
-        threadDialog.setContentText("Thread ID:");
-        
-        Optional<String> threadResult = threadDialog.showAndWait();
-        if (!threadResult.isPresent()) return;
-        
-        int threadId;
-        try {
-            threadId = Integer.parseInt(threadResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Thread ID.\n");
-            return;
-        }
-        
-        Thread thread = threads.stream().filter(t -> t.getId() == threadId).findFirst().orElse(null);
+    }
+
+    private void refreshThreadSelector() {
+        threadData.setAll(allThreads);
+    }
+
+    private void refreshPostsForThread(Thread thread) {
         if (thread == null) {
-            displayArea.setText("Thread not found.\n");
+            postData.clear();
+            replyData.clear();
+            markReadButton.setDisable(true);
             return;
         }
-        
-        TextInputDialog authorDialog = new TextInputDialog();
-        authorDialog.setTitle("Create Post");
-        authorDialog.setHeaderText("Enter your name:");
-        authorDialog.setContentText("Name:");
-        
-        Optional<String> authorResult = authorDialog.showAndWait();
-        if (!authorResult.isPresent()) return;
-        
-        TextInputDialog contentDialog = new TextInputDialog();
-        contentDialog.setTitle("Create Post");
-        contentDialog.setHeaderText("Enter post content:");
-        contentDialog.setContentText("Content:");
-        
-        Optional<String> contentResult = contentDialog.showAndWait();
-        if (!contentResult.isPresent()) return;
-        
+        postData.setAll(thread.getPosts());
+        postListView.getSelectionModel().clearSelection();
+        replyData.clear();
+        markReadButton.setDisable(true);
+    }
+
+    private void onPostSelected(Post post) {
+        if (post == null) {
+            replyData.clear();
+            markReadButton.setDisable(true);
+            return;
+        }
+
+        markReadButton.setDisable(post.hasBeenRead());
+
+        Thread thread = getThreadForPost(post);
+        String threadName = thread != null ? thread.getName() : "Unknown thread";
+        String author = post.getAuthor() != null ? post.getAuthor() : "Unknown author";
+        String status = post.hasBeenRead() ? "Read" : "Unread";
+
+        replyData.setAll(post.getReplies());
+        replyListView.refresh();
+        replyListView.getSelectionModel().clearSelection();
+        int replyCount = replyData.size();
+        String suffix = replyCount == 0
+            ? "No replies yet."
+            : replyCount == 1 ? "1 reply." : replyCount + " replies.";
+        showStatus(String.format("Post #%d • %s • %s • %s — %s",
+            post.getId(), threadName, author, status, suffix));
+    }
+
+    private void onReplySelected(Reply reply) {
+        if (reply == null) {
+            return;
+        }
+
+        String author = reply.getAuthor() != null ? reply.getAuthor() : "Unknown author";
+        String status = reply.isRead() ? "Read" : "Unread";
+
+        showStatus(String.format("Reply #%d • %s • %s", reply.getId(), author, status));
+    }
+
+    private void addNewPost() {
+        Thread thread = resolveActiveThread();
+        if (thread == null) {
+            showStatus("Select a thread before posting.");
+            return;
+        }
+
+        String author = requireUsername("post");
+        if (author == null) {
+            return;
+        }
+
+        String content = extractText(newPostArea, "Post content cannot be empty.");
+        if (content == null) {
+            return;
+        }
+
         try {
-            Post post = new Post(postIdCounter++, authorResult.get(), contentResult.get());
-            posts.add(post);
+            Post post = new Post(postIdCounter++, author, content);
             thread.addPost(post);
-            displayArea.setText("Post created in thread: " + thread.getName() + "\n");
-        } catch (IllegalArgumentException e) {
-            displayArea.setText("Error: " + e.getMessage() + "\n");
-        }
-    }
-    
-    
-    /**
-   	 * Method: void replyToPost()
-   	 * Description: Instantiates a new reply and adds it to the collection
-   	 */
-    public void replyToPost() {
-    	
-    	listPostsWithReplies();
-        
-        TextInputDialog postDialog = new TextInputDialog();
-        postDialog.setTitle("Reply to Post");
-        postDialog.setHeaderText("Enter Post ID to reply to:");
-        postDialog.setContentText("Post ID:");
-        
-        Optional<String> postResult = postDialog.showAndWait();
-        if (!postResult.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(postResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
-        if (post == null) {
-            displayArea.setText("Post not found.\n");
-            return;
-        }
-        
-        TextInputDialog authorDialog = new TextInputDialog();
-        authorDialog.setTitle("Reply to Post");
-        authorDialog.setHeaderText("Enter your name:");
-        authorDialog.setContentText("Name:");
-        
-        Optional<String> authorResult = authorDialog.showAndWait();
-        if (!authorResult.isPresent()) return;
-        
-        TextInputDialog contentDialog = new TextInputDialog();
-        contentDialog.setTitle("Reply to Post");
-        contentDialog.setHeaderText("Enter reply content:");
-        contentDialog.setContentText("Content:");
-        
-        Optional<String> contentResult = contentDialog.showAndWait();
-        if (!contentResult.isPresent()) return;
-        
-        try {
-            Reply reply = new Reply(replyIdCounter++, authorResult.get(), contentResult.get());
-            post.addReply(reply);
-            displayArea.setText("Reply added!\n");
-        } catch (IllegalArgumentException e) {
-            displayArea.setText("Error: " + e.getMessage() + "\n");
-        }
-    }
-
-    
-    /**
-   	 * Method: void listPostsWithReplies()
-   	 * Description: Displays all posts
-   	 */
-    public void listPostsWithReplies() {
-    	
-
-    	if (posts.isEmpty()) {
-            displayArea.setText("No posts yet.\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        for (Post post : posts) {
-            sb.append(post).append("\n");
-            List<Reply> replies = post.getReplies();
-            if (replies.isEmpty()) {
-                sb.append("   (No replies yet)\n");
+            allPosts.add(post);
+            postToThread.put(post, thread);
+            if (viewMode != ViewMode.THREAD) {
+                resetView();
             } else {
-                for (Reply reply : replies) {
-                    sb.append("   ").append(reply).append("\n");
-                }
+                refreshPostsForThread(thread);
             }
+            postListView.getSelectionModel().select(post);
+            newPostArea.clear();
+            showStatus("Post published to \"" + thread.getName() + "\".");
+        } catch (IllegalArgumentException ex) {
+            showStatus("Error: " + ex.getMessage());
         }
-        displayArea.setText(sb.toString());
     }
 
-    
-    /**
-   	 * Method: void viewReplies()
-   	 * Description: Displays the replies under a specified post
-   	 */
-    public void viewReplies() {
-        
-    	listPostsWithReplies();
-        
-        TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("View Replies");
-        dialog.setHeaderText("Enter Post ID to view replies:");
-        dialog.setContentText("Post ID:");
-        
+    private void addReplyToSelectedPost() {
+        Post post = postListView.getSelectionModel().getSelectedItem();
+        if (post == null) {
+            showStatus("Select a post to reply to.");
+            return;
+        }
+
+        String author = requireUsername("reply");
+        if (author == null) {
+            return;
+        }
+
+        String content = extractText(newReplyArea, "Reply content cannot be empty.");
+        if (content == null) {
+            return;
+        }
+
+        try {
+            Reply reply = new Reply(replyIdCounter++, author, content);
+            post.addReply(reply);
+            replyData.add(reply);
+            replyListView.refresh();
+            replyListView.getSelectionModel().select(reply);
+            newReplyArea.clear();
+            showStatus("Reply added.");
+        } catch (IllegalArgumentException ex) {
+            showStatus("Error: " + ex.getMessage());
+        }
+    }
+
+    private void editSelectedPost() {
+        Post post = postListView.getSelectionModel().getSelectedItem();
+        if (post == null) {
+            return;
+        }
+
+        if (!canModify(post.getAuthor())) {
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog(post.getMessage());
+        dialog.setTitle("Edit Post");
+        dialog.setHeaderText("Update the post content");
         Optional<String> result = dialog.showAndWait();
-        if (!result.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(result.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
+        if (result.isEmpty()) {
             return;
         }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
+
+        String updated = result.get().trim();
+        if (updated.isEmpty()) {
+            showStatus("Post content cannot be empty.");
+            return;
+        }
+
+        try {
+            post.updateContent(updated);
+            refreshAfterEdit(post);
+            showStatus("Post updated.");
+        } catch (IllegalArgumentException ex) {
+            showStatus("Error: " + ex.getMessage());
+        }
+    }
+
+    private void deleteSelectedPost() {
+        Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
-            displayArea.setText("Post not found.\n");
             return;
         }
-        
-        if (post.getReplies().isEmpty()) {
-            displayArea.setText("No replies yet.\n");
-        } else {
-            StringBuilder sb = new StringBuilder();
-            for (Reply reply : post.getReplies()) {
-                sb.append(reply).append("\n");
-            }
-            displayArea.setText(sb.toString());
+
+        if (!canModify(post.getAuthor())) {
+            return;
         }
+
+        if (!confirm("Delete Post", "Are you sure you want to delete this post?")) {
+            return;
+        }
+
+        Thread thread = getThreadForPost(post);
+        if (thread != null) {
+            thread.removePost(post);
+        }
+        allPosts.remove(post);
+        postToThread.remove(post);
+        postData.remove(post);
+        replyData.clear();
+        markReadButton.setDisable(true);
+        showStatus("Post deleted.");
     }
-    
-    
-    /**
-   	 * Method: void editPost()
-   	 * Description: Allows the contents of a post to be changed
-   	 */
-    public void editPost() {
-        
-    	
-    	listPostsWithReplies();
-        
-        TextInputDialog postDialog = new TextInputDialog();
-        postDialog.setTitle("Edit Post");
-        postDialog.setHeaderText("Enter Post ID to edit:");
-        postDialog.setContentText("Post ID:");
-        
-        Optional<String> postResult = postDialog.showAndWait();
-        if (!postResult.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(postResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
+
+    private void markSelectedPostAsRead() {
+        Post post = postListView.getSelectionModel().getSelectedItem();
         if (post == null) {
-            displayArea.setText("Post not found.\n");
             return;
         }
-        
-        TextInputDialog nameDialog = new TextInputDialog();
-        nameDialog.setTitle("Edit Post");
-        nameDialog.setHeaderText("Enter your name:");
-        nameDialog.setContentText("Name:");
-        
-        Optional<String> nameResult = nameDialog.showAndWait();
-        if (!nameResult.isPresent()) return;
-        
-        String userName = nameResult.get();
-        if (post.getAuthor() == null || !userName.equals(post.getAuthor())) {
-            displayArea.setText("You can only edit your own post.\n");
-            return;
-        }
-        
-        displayArea.setText("Current message: " + post.getMessage() + "\n");
-        
-        TextInputDialog contentDialog = new TextInputDialog();
-        contentDialog.setTitle("Edit Post");
-        contentDialog.setHeaderText("Enter new message:");
-        contentDialog.setContentText("New message:");
-        
-        Optional<String> contentResult = contentDialog.showAndWait();
-        if (!contentResult.isPresent()) return;
-        
-        String newContent = contentResult.get();
-        if (newContent == null || newContent.trim().isEmpty()) {
-            displayArea.setText("Error: Content cannot be empty.\n");
-            return;
-        }
-        
-        post.updateContent(newContent);
-        displayArea.setText("Post updated.\n");
-    }
 
-    
-    /**
-   	 * Method: void editReply()
-   	 * Description: Allows the contents of a reply to be changed
-   	 */
-    public void editReply() {
-    	listPostsWithReplies();
-        
-        TextInputDialog postDialog = new TextInputDialog();
-        postDialog.setTitle("Edit Reply");
-        postDialog.setHeaderText("Enter Post ID of the reply to edit:");
-        postDialog.setContentText("Post ID:");
-        
-        Optional<String> postResult = postDialog.showAndWait();
-        if (!postResult.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(postResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
-        if (post == null) {
-            displayArea.setText("Post not found.\n");
-            return;
-        }
-        
-        if (post.getReplies().isEmpty()) {
-            displayArea.setText("No replies to edit.\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        for (Reply reply : post.getReplies()) {
-            sb.append(reply).append("\n");
-        }
-        displayArea.setText(sb.toString());
-        
-        TextInputDialog replyDialog = new TextInputDialog();
-        replyDialog.setTitle("Edit Reply");
-        replyDialog.setHeaderText("Enter Reply ID to edit:");
-        replyDialog.setContentText("Reply ID:");
-        
-        Optional<String> replyResult = replyDialog.showAndWait();
-        if (!replyResult.isPresent()) return;
-        
-        int replyId;
-        try {
-            replyId = Integer.parseInt(replyResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Reply ID.\n");
-            return;
-        }
-        
-        Reply reply = post.getReplies().stream().filter(r -> r.getId() == replyId).findFirst().orElse(null);
-        if (reply == null) {
-            displayArea.setText("Reply not found.\n");
-            return;
-        }
-        
-        TextInputDialog nameDialog = new TextInputDialog();
-        nameDialog.setTitle("Edit Reply");
-        nameDialog.setHeaderText("Enter your name:");
-        nameDialog.setContentText("Name:");
-        
-        Optional<String> nameResult = nameDialog.showAndWait();
-        if (!nameResult.isPresent()) return;
-        
-        String userName = nameResult.get();
-        if (reply.getAuthor() == null || !userName.equals(reply.getAuthor())) {
-            displayArea.setText("You can only edit your own reply.\n");
-            return;
-        }
-        
-        displayArea.setText("Current content: " + reply.getContent() + "\n");
-        
-        TextInputDialog contentDialog = new TextInputDialog();
-        contentDialog.setTitle("Edit Reply");
-        contentDialog.setHeaderText("Enter new reply content:");
-        contentDialog.setContentText("New content:");
-        
-        Optional<String> contentResult = contentDialog.showAndWait();
-        if (!contentResult.isPresent()) return;
-        
-        String newContent = contentResult.get();
-        if (newContent == null || newContent.trim().isEmpty()) {
-            displayArea.setText("Error: Content cannot be empty.\n");
-            return;
-        }
-        
-        reply.updateContent(newContent);
-        displayArea.setText("Reply updated.\n");
-    }
-
-    
-    
-    /**
-   	 * Method: void deletePost()
-   	 * Description: Allows a post to be removed (doesn't remove its replies)
-   	 */
-    public void deletePost() {
-        
-    	listPostsWithReplies();
-        
-        TextInputDialog postDialog = new TextInputDialog();
-        postDialog.setTitle("Delete Post");
-        postDialog.setHeaderText("Enter Post ID to delete:");
-        postDialog.setContentText("Post ID:");
-        
-        Optional<String> postResult = postDialog.showAndWait();
-        if (!postResult.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(postResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
-        if (post == null) {
-            displayArea.setText("Post not found.\n");
-            return;
-        }
-        
-        TextInputDialog nameDialog = new TextInputDialog();
-        nameDialog.setTitle("Delete Post");
-        nameDialog.setHeaderText("Enter your name:");
-        nameDialog.setContentText("Name:");
-        
-        Optional<String> nameResult = nameDialog.showAndWait();
-        if (!nameResult.isPresent()) return;
-        
-        String userName = nameResult.get();
-        if (post.getAuthor() == null || !userName.equals(post.getAuthor())) {
-            displayArea.setText("You can only delete your own post.\n");
-            return;
-        }
-        
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Delete Post");
-        alert.setHeaderText("Are you sure you want to delete this post?");
-        alert.setContentText("Press OK to confirm deletion.");
-        
-        Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            post.setAuthor(null);
-            post.updateContent("[Message deleted by user]");
-            displayArea.setText("Post deleted.\n");
-        } else {
-            displayArea.setText("Deletion cancelled.\n");
-        }
-    }
-
-    
-    /**
-   	 * Method: void deletePost()
-   	 * Description: Allows a reply to be removed
-   	 */
-    public void deleteReply() {
-        
-    	listPostsWithReplies();
-        
-        TextInputDialog postDialog = new TextInputDialog();
-        postDialog.setTitle("Delete Reply");
-        postDialog.setHeaderText("Enter Post ID of the reply to delete:");
-        postDialog.setContentText("Post ID:");
-        
-        Optional<String> postResult = postDialog.showAndWait();
-        if (!postResult.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(postResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
-        if (post == null) {
-            displayArea.setText("Post not found.\n");
-            return;
-        }
-        
-        if (post.getReplies().isEmpty()) {
-            displayArea.setText("No replies to delete.\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        for (Reply reply : post.getReplies()) {
-            sb.append(reply).append("\n");
-        }
-        displayArea.setText(sb.toString());
-        
-        TextInputDialog replyDialog = new TextInputDialog();
-        replyDialog.setTitle("Delete Reply");
-        replyDialog.setHeaderText("Enter Reply ID to delete:");
-        replyDialog.setContentText("Reply ID:");
-        
-        Optional<String> replyResult = replyDialog.showAndWait();
-        if (!replyResult.isPresent()) return;
-        
-        int replyId;
-        try {
-            replyId = Integer.parseInt(replyResult.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Reply ID.\n");
-            return;
-        }
-        
-        Reply reply = post.getReplies().stream().filter(r -> r.getId() == replyId).findFirst().orElse(null);
-        if (reply == null) {
-            displayArea.setText("Reply not found.\n");
-            return;
-        }
-        
-        TextInputDialog nameDialog = new TextInputDialog();
-        nameDialog.setTitle("Delete Reply");
-        nameDialog.setHeaderText("Enter your name:");
-        nameDialog.setContentText("Name:");
-        
-        Optional<String> nameResult = nameDialog.showAndWait();
-        if (!nameResult.isPresent()) return;
-        
-        String userName = nameResult.get();
-        if (reply.getAuthor() == null || !userName.equals(reply.getAuthor())) {
-            displayArea.setText("You can only delete your own reply.\n");
-            return;
-        }
-        
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Delete Reply");
-        alert.setHeaderText("Are you sure you want to delete this reply?");
-        alert.setContentText("Press OK to confirm deletion.");
-        
-        Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            reply.setAuthor(null);
-            reply.updateContent("[Message deleted by user]");
-            displayArea.setText("Reply deleted.\n");
-        } else {
-            displayArea.setText("Deletion cancelled.\n");
-        }
-    }
-
-    /**
-     * Method: void searchPostsByKeyword()
-     * Description: Searches and displays posts containing a keyword
-     */
-    public void searchPostsByKeyword() {
-        
-    	TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Search Posts");
-        dialog.setHeaderText("Enter keyword to search:");
-        dialog.setContentText("Keyword:");
-        
-        Optional<String> result = dialog.showAndWait();
-        if (!result.isPresent()) return;
-        
-        String keyword = result.get().toLowerCase();
-        
-        List<Post> matchingPosts = new ArrayList<>();
-        for (Post post : posts) {
-            if (post.getMessage().toLowerCase().contains(keyword) ||
-                (post.getAuthor() != null && post.getAuthor().toLowerCase().contains(keyword))) {
-                matchingPosts.add(post);
-            }
-        }
-        
-        if (matchingPosts.isEmpty()) {
-            displayArea.setText("No posts found matching keyword: " + keyword + "\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder("Posts matching '" + keyword + "':\n");
-        for (Post post : matchingPosts) {
-            sb.append(post).append(" [Read: ").append(post.hasBeenRead() ? "Yes" : "No").append("]\n");
-            List<Reply> replies = post.getReplies();
-            if (!replies.isEmpty()) {
-                sb.append("   (").append(replies.size()).append(" replies)\n");
-            }
-        }
-        displayArea.setText(sb.toString());
-    }
-
-    /**
-     * Method: void filterByUnread()
-     * Description: Displays only unread posts
-     */
-    public void filterByUnread() {
-        
-    	List<Post> unreadPosts = new ArrayList<>();
-        for (Post post : posts) {
-            if (!post.hasBeenRead()) {
-                unreadPosts.add(post);
-            }
-        }
-        
-        if (unreadPosts.isEmpty()) {
-            displayArea.setText("No unread posts.\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder("Unread posts:\n");
-        for (Post post : unreadPosts) {
-            sb.append(post).append("\n");
-            List<Reply> replies = post.getReplies();
-            if (!replies.isEmpty()) {
-                sb.append("   (").append(replies.size()).append(" replies)\n");
-            }
-        }
-        displayArea.setText(sb.toString());
-    }
-
-    /**
-     * Method: void listPostsByUser()
-     * Description: Lists all posts from a specific user with reply count and read status
-     */
-    public void listPostsByUser() {
-        
-    	TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Posts by User");
-        dialog.setHeaderText("Enter username to search:");
-        dialog.setContentText("Username:");
-        
-        Optional<String> result = dialog.showAndWait();
-        if (!result.isPresent()) return;
-        
-        String username = result.get();
-        
-        List<Post> userPosts = new ArrayList<>();
-        for (Post post : posts) {
-            if (post.getAuthor() != null && post.getAuthor().equals(username)) {
-                userPosts.add(post);
-            }
-        }
-        
-        if (userPosts.isEmpty()) {
-            displayArea.setText("No posts found from user: " + username + "\n");
-            return;
-        }
-        
-        StringBuilder sb = new StringBuilder("Posts by " + username + ":\n");
-        for (Post post : userPosts) {
-            int replyCount = post.getReplies().size();
-            String readStatus = post.hasBeenRead() ? "Read" : "Unread";
-            sb.append(post).append(" | Replies: ").append(replyCount).append(" | Status: ").append(readStatus).append("\n");
-        }
-        displayArea.setText(sb.toString());
-    }
-
-    /**
-     * Method: void markPostAsRead()
-     * Description: Marks a specific post as read
-     */
-    public void markPostAsRead() {
-        
-    	listPostsWithReplies();
-        
-        TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Mark Post as Read");
-        dialog.setHeaderText("Enter Post ID to mark as read:");
-        dialog.setContentText("Post ID:");
-        
-        Optional<String> result = dialog.showAndWait();
-        if (!result.isPresent()) return;
-        
-        int postId;
-        try {
-            postId = Integer.parseInt(result.get());
-        } catch (NumberFormatException e) {
-            displayArea.setText("Invalid Post ID.\n");
-            return;
-        }
-        
-        Post post = posts.stream().filter(p -> p.getId() == postId).findFirst().orElse(null);
-        if (post == null) {
-            displayArea.setText("Post not found.\n");
-            return;
-        }
-        
         post.markAsRead();
-        displayArea.setText("Post marked as read.\n");
-
+        markReadButton.setDisable(true);
+        postListView.refresh();
+        refreshAfterEdit(post);
+        showStatus("Marked post as read.");
     }
 
+    private void editSelectedReply() {
+        Reply reply = replyListView.getSelectionModel().getSelectedItem();
+        if (reply == null) {
+            return;
+        }
 
+        if (!canModify(reply.getAuthor())) {
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog(reply.getContent());
+        dialog.setTitle("Edit Reply");
+        dialog.setHeaderText("Update the reply content");
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return;
+        }
+
+        String updated = result.get().trim();
+        if (updated.isEmpty()) {
+            showStatus("Reply content cannot be empty.");
+            return;
+        }
+
+        try {
+            reply.updateContent(updated);
+            replyListView.refresh();
+            showStatus("Reply updated.");
+        } catch (IllegalArgumentException ex) {
+            showStatus("Error: " + ex.getMessage());
+        }
+    }
+
+    private void deleteSelectedReply() {
+        Reply reply = replyListView.getSelectionModel().getSelectedItem();
+        if (reply == null) {
+            return;
+        }
+
+        if (!canModify(reply.getAuthor())) {
+            return;
+        }
+
+        if (!confirm("Delete Reply", "Are you sure you want to delete this reply?")) {
+            return;
+        }
+
+        Post post = postListView.getSelectionModel().getSelectedItem();
+        if (post != null) {
+            post.removeReply(reply);
+        }
+        replyData.remove(reply);
+        replyListView.refresh();
+        showStatus("Reply deleted.");
+    }
+
+    private void searchPosts() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Search Posts");
+        dialog.setHeaderText("Enter a keyword to search");
+        dialog.setContentText("Keyword:");
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return;
+        }
+
+        String keyword = result.get().trim().toLowerCase();
+        if (keyword.isEmpty()) {
+            showStatus("Search term cannot be empty.");
+            return;
+        }
+
+        List<Post> matches = allPosts.stream()
+            .filter(post ->
+                (post.getMessage() != null && post.getMessage().toLowerCase().contains(keyword)) ||
+                (post.getAuthor() != null && post.getAuthor().toLowerCase().contains(keyword)))
+            .collect(Collectors.toList());
+
+        if (matches.isEmpty()) {
+            showStatus("No posts found for \"" + keyword + "\".");
+            return;
+        }
+
+        applyFilteredPosts(matches, "Showing results for \"" + keyword + "\".");
+    }
+
+    private void showPostsByCurrentUser() {
+        String user = requireUsername("view your posts");
+        if (user == null) {
+            return;
+        }
+
+        List<Post> matches = allPosts.stream()
+            .filter(post -> user.equals(post.getAuthor()))
+            .collect(Collectors.toList());
+
+        if (matches.isEmpty()) {
+            showStatus("No posts found for " + user + ".");
+            return;
+        }
+
+        applyFilteredPosts(matches, "Showing posts by " + user + ".");
+    }
+
+    private void showUnreadPosts() {
+        List<Post> unread = allPosts.stream()
+            .filter(post -> !post.hasBeenRead())
+            .collect(Collectors.toList());
+
+        if (unread.isEmpty()) {
+            showStatus("You're caught up! No unread posts.");
+            return;
+        }
+
+        applyFilteredPosts(unread, "Showing unread posts.");
+    }
+
+    private void applyFilteredPosts(List<Post> posts, String message) {
+        viewMode = ViewMode.FILTERED;
+        postData.setAll(posts);
+        postListView.getSelectionModel().clearSelection();
+        replyData.clear();
+        threadSelector.getSelectionModel().clearSelection();
+        showStatus(message + " Use Reset View to return to threads.");
+    }
+
+    private void resetView() {
+        viewMode = ViewMode.THREAD;
+        refreshThreadSelector();
+        if (!threadData.isEmpty()) {
+            threadSelector.getSelectionModel().selectFirst();
+            refreshPostsForThread(threadSelector.getValue());
+            showStatus("Back to thread view.");
+        }
+    }
+
+    private void createThread() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("New Thread");
+        dialog.setHeaderText("Create a new discussion thread");
+        dialog.setContentText("Thread name:");
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return;
+        }
+
+        String name = result.get().trim();
+        if (name.isEmpty()) {
+            showStatus("Thread name cannot be empty.");
+            return;
+        }
+
+        Thread thread = new Thread(threadIdCounter++, name);
+        allThreads.add(thread);
+        refreshThreadSelector();
+        threadSelector.getSelectionModel().select(thread);
+        refreshPostsForThread(thread);
+        showStatus("Thread \"" + name + "\" created.");
+    }
+
+    private String requireUsername(String action) {
+        String value = usernameField.getText() != null ? usernameField.getText().trim() : "";
+        if (value.isEmpty()) {
+            showStatus("Enter your display name to " + action + ".");
+            return null;
+        }
+        return value;
+    }
+
+    private String extractText(TextArea area, String errorMessage) {
+        String value = area.getText() != null ? area.getText().trim() : "";
+        if (value.isEmpty()) {
+            showStatus(errorMessage);
+            return null;
+        }
+        return value;
+    }
+
+    private boolean canModify(String author) {
+        String user = requireUsername("modify content");
+        if (user == null) {
+            return false;
+        }
+        if (author == null || !author.equals(user)) {
+            showStatus("You can only modify content posted by \"" + user + "\".");
+            return false;
+        }
+        return true;
+    }
+
+    private Thread getThreadForPost(Post post) {
+        return postToThread.get(post);
+    }
+
+    private Thread resolveActiveThread() {
+        if (viewMode == ViewMode.FILTERED) {
+            showStatus("Reset to a thread before posting.");
+            return null;
+        }
+        return threadSelector.getValue();
+    }
+
+    private void refreshAfterEdit(Post post) {
+        postListView.refresh();
+        onPostSelected(post);
+    }
+
+    private boolean confirm(String title, String message) {
+        Alert alert = new Alert(AlertType.CONFIRMATION, message);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
+        return result.filter(buttonType -> buttonType == javafx.scene.control.ButtonType.OK).isPresent();
+    }
+
+    private void showStatus(String message) {
+        statusLabel.setText(message);
+    }
+
+    private static String preview(String text, int maxLength) {
+        if (text == null) {
+            return "";
+        }
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength - 3) + "...";
+    }
+
+    private final class PostListCell extends ListCell<Post> {
+        @Override
+        protected void updateItem(Post post, boolean empty) {
+            super.updateItem(post, empty);
+            if (empty || post == null) {
+                setText(null);
+            } else {
+                Thread thread = getThreadForPost(post);
+                String threadName = thread != null ? thread.getName() : "Unknown thread";
+                String author = post.getAuthor() != null ? post.getAuthor() : "Unknown";
+                String status = post.hasBeenRead() ? "Read" : "Unread";
+                String line = String.format(
+                    "#%d • %s • %s%s%n%s",
+                    post.getId(),
+                    author,
+                    status,
+                    viewMode == ViewMode.FILTERED ? " • " + threadName : "",
+                    preview(post.getMessage(), 90)
+                );
+                setText(line);
+            }
+        }
+    }
+
+    private static final class ReplyListCell extends ListCell<Reply> {
+        @Override
+        protected void updateItem(Reply reply, boolean empty) {
+            super.updateItem(reply, empty);
+            if (empty || reply == null) {
+                setText(null);
+            } else {
+                String author = reply.getAuthor() != null ? reply.getAuthor() : "Unknown";
+                String status = reply.isRead() ? "Read" : "Unread";
+                String line = String.format(
+                    "#%d • %s • %s%n%s",
+                    reply.getId(),
+                    author,
+                    status,
+                    preview(reply.getContent(), 80)
+                );
+                setText(line);
+            }
+        }
+    }
+
+    private static final class ThreadListCell extends ListCell<Thread> {
+        @Override
+        protected void updateItem(Thread thread, boolean empty) {
+            super.updateItem(thread, empty);
+            if (empty || thread == null) {
+                setText(null);
+            } else {
+                setText(thread.getName() + " (" + thread.getPosts().size() + " posts)");
+            }
+        }
+    }
 }
